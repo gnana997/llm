@@ -156,6 +156,16 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y rocm-dev hip-dev
 
+            - name: Setup build dependencies (Unix)
+              if: runner.os != 'Windows'
+              run: |
+                  if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+                    sudo apt-get update
+                    sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev pkg-config
+                  elif [[ "${{ matrix.os }}" == "macos-latest" ]] || [[ "${{ matrix.os }}" == "macos-13" ]]; then
+                    brew install cmake ninja curl pkg-config
+                  fi
+
             - name: Build (Unix)
               if: runner.os != 'Windows'
               run: |

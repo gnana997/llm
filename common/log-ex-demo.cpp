@@ -1,5 +1,5 @@
 // Demonstration of extended logging usage
-#include "log-ex.h"
+#include "../src/log/log-ex.h"
 #include "log.h"
 #include <thread>
 #include <chrono>

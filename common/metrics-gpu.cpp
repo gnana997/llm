@@ -1,5 +1,5 @@
 #include "metrics-gpu.h"
-#include "log-ex.h"
+#include "../src/log/log-ex.h"
 #include <sstream>
 #include <iomanip>
 

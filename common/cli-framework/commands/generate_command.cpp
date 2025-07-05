@@ -2,7 +2,7 @@
 #include "arg.h"
 #include "sampling.h"
 #include "log.h"
-#include "log-ex.h"
+#include "../../src/log/log-ex.h"
 #include <iostream>
 #include <vector>
 

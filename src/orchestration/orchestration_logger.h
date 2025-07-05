@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../common/log-ex.h"
+#include "log/log-ex.h"
 #include "gpu_profiler_interface.h"
 #include "layer_distributor.h"
 #include <string>

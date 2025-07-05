@@ -1,6 +1,6 @@
 #pragma once
 
-#include "log.h"
+#include "../../common/log.h"
 #include <string>
 #include <unordered_map>
 #include <regex>

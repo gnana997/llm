@@ -1,7 +1,7 @@
 #include "metrics.h"
 #include "metrics-gpu.h"
 #include "metrics-aggregator.h"
-#include "log-ex.h"
+#include "../src/log/log-ex.h"
 #include <iostream>
 #include <thread>
 #include <random>

@@ -1,6 +1,6 @@
 #include "metrics-aggregator.h"
 #include "metrics-gpu.h"
-#include "log-ex.h"
+#include "../src/log/log-ex.h"
 #include <cmath>
 #include <numeric>
 #include <sstream>

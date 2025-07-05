@@ -62,8 +62,6 @@ add_library(${TARGET} STATIC
     llguidance.cpp
     log.cpp
     log.h
-    log-ex.cpp
-    log-ex.h
     metrics.cpp
     metrics.h
     metrics-gpu.cpp
@@ -144,7 +142,7 @@ endif ()
 
 target_include_directories(${TARGET} PUBLIC . ../vendor)
 target_compile_features   (${TARGET} PUBLIC cxx_std_17)
-target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama llama-log Threads::Threads)
 
 # Add CUDA include directories if CUDA is enabled
 if(GGML_CUDA)

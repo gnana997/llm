@@ -36,23 +36,18 @@ endif()
 
 # Configure CUDA compilation if enabled
 if(GGML_CUDA)
-    # Enable CUDA language
-    enable_language(CUDA)
+    # CUDA language is already enabled by the parent project (ggml)
+    # We just need to ensure our CUDA files are compiled correctly
     
-    # Set CUDA properties for the library
+    # Set CUDA separable compilation for the library
     set_target_properties(llama_cli_framework PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON
     )
     
-    # Set CUDA architectures if specified
-    if(CMAKE_CUDA_ARCHITECTURES)
-        set_target_properties(llama_cli_framework PROPERTIES
-            CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-        )
+    # Add CUDA include directories if available
+    if(CUDA_INCLUDE_DIRS)
+        target_include_directories(llama_cli_framework PRIVATE ${CUDA_INCLUDE_DIRS})
     endif()
-    
-    # Add CUDA include directories
-    target_include_directories(llama_cli_framework PRIVATE ${CUDA_INCLUDE_DIRS})
 endif()
 
 # Export headers

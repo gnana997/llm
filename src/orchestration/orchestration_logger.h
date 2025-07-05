@@ -185,7 +185,7 @@ public:
         
         // Set appropriate log level
         if (trace_enabled) {
-            common_log_set_verbosity_thold(1);  // Enable trace logs
+            logger.set_verbosity_thold(1);  // Enable trace logs
         }
     }
     

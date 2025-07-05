@@ -694,7 +694,7 @@ bool AdaptiveLayerRedistributor::check_redistribution_limits() const {
     auto now = std::chrono::steady_clock::now();
     int recent_redistributions = 0;
     
-    for (const auto& result : redistribution_history_) {
+    for (size_t i = 0; i < redistribution_history_.size(); ++i) {
         auto age = std::chrono::duration_cast<std::chrono::hours>(
             now - stats_.last_redistribution);
         if (age.count() < 1) {
@@ -752,7 +752,7 @@ std::vector<int> AdaptiveLayerRedistributor::find_movable_layers(int from_gpu) c
     return movable;
 }
 
-int AdaptiveLayerRedistributor::find_best_target_gpu(int layer_id,
+int AdaptiveLayerRedistributor::find_best_target_gpu([[maybe_unused]] int layer_id,
                                                     const std::vector<int>& candidates) const {
     if (candidates.empty()) {
         return -1;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../common/log.h"
+#include "ggml.h" // for ggml_log_level
 #include <string>
 #include <unordered_map>
 #include <regex>
@@ -8,6 +8,9 @@
 #include <chrono>
 #include <mutex>
 #include <atomic>
+
+// Verbosity threshold for log-ex (similar to common_log_verbosity_thold)
+extern int common_log_ex_verbosity_thold;
 
 // Extended log levels for performance and tracing
 enum common_log_level_ex : int {
@@ -96,6 +99,7 @@ public:
     void add_regex_filter(const std::string& pattern, bool include);
     void set_rotation_config(const common_log_rotation_config& config);
     void enable_performance_summary(bool enable);
+    void set_verbosity_thold(int verbosity); // Set the verbosity threshold
     
     // Log rotation
     void rotate_if_needed();
@@ -120,28 +124,28 @@ private:
 // Convenience macros for extended logging
 #define LOG_PERF(...) \
     do { \
-        if (2 <= common_log_verbosity_thold) { \
+        if (2 <= common_log_ex_verbosity_thold) { \
             common_log_ex::instance().log_perf(__VA_ARGS__); \
         } \
     } while (0)
 
 #define LOG_TRACE(...) \
     do { \
-        if (3 <= common_log_verbosity_thold) { \
+        if (3 <= common_log_ex_verbosity_thold) { \
             common_log_ex::instance().log_trace(__VA_ARGS__); \
         } \
     } while (0)
 
 #define LOG_PERFV(verbosity, ...) \
     do { \
-        if ((verbosity) <= common_log_verbosity_thold) { \
+        if ((verbosity) <= common_log_ex_verbosity_thold) { \
             common_log_ex::instance().log_perf_v(verbosity, __VA_ARGS__); \
         } \
     } while (0)
 
 #define LOG_TRACEV(verbosity, ...) \
     do { \
-        if ((verbosity) <= common_log_verbosity_thold) { \
+        if ((verbosity) <= common_log_ex_verbosity_thold) { \
             common_log_ex::instance().log_trace_v(verbosity, __VA_ARGS__); \
         } \
     } while (0)

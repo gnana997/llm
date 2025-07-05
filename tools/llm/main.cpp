@@ -3,6 +3,7 @@
 #include "common/cli-framework/commands/generate_command.h"
 #include "common/cli-framework/commands/gpu_info_command.h"
 #include "common.h"
+#include "common/log.h"
 #include "src/log/log-ex.h"
 #include <sstream>
 #include <algorithm>
@@ -29,27 +30,24 @@ extern const char * LLAMA_COMMIT;
 static void initializeLogging(const CommandContext& ctx) {
     auto& logger = common_log_ex::instance();
     
-    // Set log level
+    // Set log level - need to set both verbosity thresholds
     std::string log_level = ctx.getOption("log-level", "info");
+    int verbosity = 0;
     if (log_level == "debug") {
-        common_log_set_verbosity_thold(LOG_DEFAULT_DEBUG);
+        verbosity = LOG_DEFAULT_DEBUG;  // LOG_DEFAULT_DEBUG = 1
     } else if (log_level == "perf") {
-        common_log_set_verbosity_thold(2);
+        verbosity = 2;
     } else if (log_level == "trace") {
-        common_log_set_verbosity_thold(3);
-    } else {
-        common_log_set_verbosity_thold(0);
+        verbosity = 3;
     }
     
-    // Enable prefix and timestamps
-    common_log_set_prefix(common_log_main(), true);
-    common_log_set_timestamps(common_log_main(), true);
+    // Set both verbosity thresholds
+    common_log_verbosity_thold = verbosity;
+    common_log_ex_verbosity_thold = verbosity;
     
     // Set log file if specified
     std::string log_file = ctx.getOption("log-file", "");
     if (!log_file.empty()) {
-        common_log_set_file(common_log_main(), log_file.c_str());
-        
         // Configure rotation
         common_log_rotation_config rotation;
         rotation.base_path = log_file;
@@ -103,10 +101,6 @@ static void initializeLogging(const CommandContext& ctx) {
     if (!filter.empty()) {
         logger.add_regex_filter(filter, true);
     }
-    
-    // Enable colors for terminal output
-    bool is_tty = isatty(fileno(stdout)) && isatty(fileno(stderr));
-    common_log_set_colors(common_log_main(), is_tty);
 }
 
 // Version command

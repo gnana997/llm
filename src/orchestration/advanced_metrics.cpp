@@ -11,7 +11,7 @@ namespace orchestration {
 // Export metrics in various formats
 void export_advanced_metrics_json(std::ostream& out) {
     auto& metrics = AdvancedLayerMetrics::instance();
-    auto& registry = MetricsRegistry::instance();
+    // auto& registry = MetricsRegistry::instance(); // Currently unused
     
     out << "{\n";
     out << "  \"advanced_layer_metrics\": {\n";

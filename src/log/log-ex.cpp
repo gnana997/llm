@@ -7,8 +7,12 @@
 #include <cstring>
 #include <filesystem>
 #include <algorithm>
+#include <iostream>
 
 namespace fs = std::filesystem;
+
+// Global verbosity threshold for extended logging
+int common_log_ex_verbosity_thold = 0;
 
 class common_log_ex::impl {
 public:
@@ -40,8 +44,8 @@ public:
             log_text(level, category_str, buffer);
         }
         
-        // Also log to common_log for compatibility
-        common_log_add(common_log_main(), level, "%s", buffer);
+        // Also output to console based on log level
+        output_to_console(level, category_str, buffer);
     }
     
     void log_json(enum ggml_log_level level, const char* category, const char* message) {
@@ -307,6 +311,21 @@ public:
         }
     }
     
+    void output_to_console(enum ggml_log_level level, const char* category, const char* message) {
+        // Select output stream based on log level
+        std::ostream* out_stream = &std::cout;
+        if (level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_DEBUG) {
+            out_stream = &std::cerr;
+        }
+        
+        // Format and output the message
+        if (category && strlen(category) > 0) {
+            *out_stream << "[" << category << "] ";
+        }
+        *out_stream << message;
+        out_stream->flush();
+    }
+    
     // Member variables
     std::mutex mutex;
     common_log_format format;
@@ -347,7 +366,7 @@ void common_log_ex::log_trace(const char* fmt, ...) {
 }
 
 void common_log_ex::log_perf_v(int verbosity, const char* fmt, ...) {
-    if (verbosity <= common_log_verbosity_thold) {
+    if (verbosity <= common_log_ex_verbosity_thold) {
         va_list args;
         va_start(args, fmt);
         pimpl->log_formatted(GGML_LOG_LEVEL_INFO, "PERF", fmt, args);
@@ -356,7 +375,7 @@ void common_log_ex::log_perf_v(int verbosity, const char* fmt, ...) {
 }
 
 void common_log_ex::log_trace_v(int verbosity, const char* fmt, ...) {
-    if (verbosity <= common_log_verbosity_thold) {
+    if (verbosity <= common_log_ex_verbosity_thold) {
         va_list args;
         va_start(args, fmt);
         pimpl->log_formatted(GGML_LOG_LEVEL_DEBUG, "TRACE", fmt, args);
@@ -423,6 +442,10 @@ void common_log_ex::set_rotation_config(const common_log_rotation_config& config
 
 void common_log_ex::enable_performance_summary(bool enable) {
     pimpl->enable_perf_summary = enable;
+}
+
+void common_log_ex::set_verbosity_thold(int verbosity) {
+    common_log_ex_verbosity_thold = verbosity;
 }
 
 void common_log_ex::rotate_if_needed() {

@@ -252,6 +252,7 @@ struct common_params {
     float   tensor_split[128] = {0}; // how split tensors should be distributed across GPUs
 
     enum llama_split_mode split_mode = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
+    enum llama_gpu_strategy gpu_strategy = LLAMA_GPU_STRATEGY_EQUAL; // strategy for distributing layers across GPUs
 
     struct cpu_params cpuparams;
     struct cpu_params cpuparams_batch;

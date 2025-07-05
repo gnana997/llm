@@ -13,6 +13,12 @@
 
 #include "ggml-cpp.h"
 
+// Include orchestration for intelligent layer distribution
+#ifdef GGML_USE_CUDA
+#include "orchestration/gpu_profiler.h"
+#include "orchestration/layer_distributor.h"
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -1616,6 +1622,49 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
         splits[i] /= split_sum;
     }
 
+#ifdef GGML_USE_CUDA
+    // Use intelligent layer distribution if enabled and no manual splits provided
+    bool use_intelligent_distribution = params.gpu_strategy == LLAMA_GPU_STRATEGY_OPTIMIZED && all_zero;
+    std::vector<int> layer_to_gpu_mapping;
+    
+    if (use_intelligent_distribution && n_devices() > 1 && act_gpu_layers > 0) {
+        LLAMA_LOG_INFO("%s: using intelligent layer distribution across %zu GPUs\n", __func__, n_devices());
+        
+        // Profile GPUs
+        llama::orchestration::GpuProfiler profiler;
+        auto profiling_result = profiler.profile_all_gpus();
+        
+        if (profiling_result.success && profiling_result.gpu_profiles.size() >= n_devices()) {
+            // Initialize layer distributor
+            llama::orchestration::LayerDistributor distributor;
+            distributor.initialize(profiling_result.gpu_profiles);
+            
+            // Configure distribution
+            llama::orchestration::DistributionConfig config;
+            config.strategy = llama::orchestration::DistributionStrategy::OPTIMIZED;
+            config.memory_safety_margin = 0.9f;
+            config.enable_caching = true;
+            
+            // Distribute layers
+            auto distribution_result = distributor.distribute_layers(*this, act_gpu_layers, config);
+            
+            // Build layer to GPU mapping
+            layer_to_gpu_mapping.resize(n_layer + 1, 0);  // +1 for output layer
+            for (const auto& assignment : distribution_result.assignments) {
+                if (assignment.layer_index < static_cast<int>(layer_to_gpu_mapping.size())) {
+                    layer_to_gpu_mapping[assignment.layer_index] = assignment.gpu_id;
+                }
+            }
+            
+            LLAMA_LOG_INFO("%s: intelligent distribution complete - expected speedup: %.2fx\n", 
+                          __func__, distribution_result.expected_speedup);
+        } else {
+            LLAMA_LOG_WARN("%s: GPU profiling failed, falling back to default distribution\n", __func__);
+            use_intelligent_distribution = false;
+        }
+    }
+#endif
+
     ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
     if (cpu_dev == nullptr) {
         throw std::runtime_error(format("%s: no CPU backend found", __func__));
@@ -1624,6 +1673,22 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
     const int act_gpu_layers = devices.empty() ? 0 : std::min(n_gpu_layers, (int)n_layer + 1);
     auto get_layer_buft_list = [&](int il) -> llama_model::impl::layer_dev {
         const bool is_swa = il < (int) hparams.n_layer && hparams.is_swa(il);
+        
+#ifdef GGML_USE_CUDA
+        // Use intelligent distribution mapping if available
+        if (use_intelligent_distribution && !layer_to_gpu_mapping.empty() && 
+            il >= 0 && il < static_cast<int>(layer_to_gpu_mapping.size())) {
+            int gpu_id = layer_to_gpu_mapping[il];
+            if (gpu_id >= 0 && gpu_id < static_cast<int>(devices.size())) {
+                auto * dev = devices.at(gpu_id);
+                LLAMA_LOG_DEBUG("load_tensors: layer %3d assigned to device %s (intelligent), is_swa = %d\n", 
+                               il, ggml_backend_dev_name(dev), is_swa);
+                return {dev, &pimpl->gpu_buft_list.at(dev)};
+            }
+        }
+#endif
+        
+        // Default distribution logic
         if (il < i_gpu_start || (il - i_gpu_start) >= act_gpu_layers) {
             LLAMA_LOG_DEBUG("load_tensors: layer %3d assigned to device %s, is_swa = %d\n", il, ggml_backend_dev_name(cpu_dev), is_swa);
             return {cpu_dev, &pimpl->cpu_buft_list};
@@ -15060,6 +15125,7 @@ llama_model_params llama_model_default_params() {
         /*.tensor_buft_overrides       =*/ nullptr,
         /*.n_gpu_layers                =*/ 0,
         /*.split_mode                  =*/ LLAMA_SPLIT_MODE_LAYER,
+        /*.gpu_strategy                =*/ LLAMA_GPU_STRATEGY_EQUAL,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.progress_callback           =*/ nullptr,

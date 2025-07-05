@@ -1,0 +1,16 @@
+{
+  "model.path": "/path/to/your/model.gguf",
+  "model.gpu_layers": "32",
+  "generation.temperature": "0.8",
+  "generation.top_k": "40",
+  "generation.top_p": "0.95",
+  "generation.repeat_penalty": "1.1",
+  "performance.threads": "8",
+  "performance.batch_size": "512",
+  "performance.context_size": "4096",
+  "server.host": "127.0.0.1",
+  "server.port": "8080",
+  "server.api_key": "your-api-key-here",
+  "logging.level": "info",
+  "logging.file": "llm.log"
+}

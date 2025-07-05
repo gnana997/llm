@@ -225,6 +225,12 @@ extern "C" {
         LLAMA_SPLIT_MODE_ROW   = 2, // split layers and KV across GPUs, use tensor parallelism if supported
     };
 
+    enum llama_gpu_strategy {
+        LLAMA_GPU_STRATEGY_EQUAL     = 0, // traditional equal distribution
+        LLAMA_GPU_STRATEGY_OPTIMIZED = 1, // intelligent distribution based on GPU capabilities
+        LLAMA_GPU_STRATEGY_MANUAL    = 2, // manual distribution via tensor_split
+    };
+
     // TODO: simplify (https://github.com/ggml-org/llama.cpp/pull/9294#pullrequestreview-2286561979)
     typedef struct llama_token_data {
         llama_token id; // token id
@@ -304,6 +310,7 @@ extern "C" {
 
         int32_t n_gpu_layers; // number of layers to store in VRAM
         enum llama_split_mode split_mode; // how to split the model across multiple GPUs
+        enum llama_gpu_strategy gpu_strategy; // strategy for distributing layers across GPUs
 
         // the GPU that is used for the entire model when split_mode is LLAMA_SPLIT_MODE_NONE
         int32_t main_gpu;

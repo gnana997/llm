@@ -1,11 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Got an idea?
-    url: https://github.com/ggml-org/llama.cpp/discussions/categories/ideas
-    about: Pop it there. It may then become an enhancement ticket.
-  - name: Got a question?
-    url: https://github.com/ggml-org/llama.cpp/discussions/categories/q-a
-    about: Ask a question there!
+  - name: LLM CLI Discussions
+    url: https://github.com/gnana997/llm/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: LLM CLI Documentation
+    url: https://github.com/gnana997/llm/blob/master/README.md
+    about: Check our documentation for usage and examples
   - name: Want to contribute?
-    url: https://github.com/ggml-org/llama.cpp/wiki/contribute
-    about: Head to the contribution guide page of the wiki for areas you can help with
+    url: https://github.com/gnana997/llm/blob/master/CONTRIBUTING.md
+    about: Read our contribution guidelines before submitting PRs

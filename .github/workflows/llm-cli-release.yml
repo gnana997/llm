@@ -1,0 +1,280 @@
+name: LLM CLI Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_version: ${{ steps.version.outputs.version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          VERSION="${{ github.event.inputs.tag }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the previous tag
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        # Generate changelog
+        if [[ -n "$PREV_TAG" ]]; then
+          echo "## What's Changed" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          git log --pretty=format:"* %s (%h)" ${PREV_TAG}..HEAD >> CHANGELOG.md
+        else
+          echo "## Initial Release" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "* First release of LLM CLI" >> CHANGELOG.md
+        fi
+        
+        echo "" >> CHANGELOG.md
+        echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}" >> CHANGELOG.md
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        release_name: LLM CLI ${{ steps.version.outputs.version }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+
+  build-release:
+    name: Build Release Binaries
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            build_type: CUDA
+            cmake_args: "-DGGML_CUDA=ON"
+            artifact_name: llm
+            asset_name: llm-linux-x64-cuda
+          
+          - os: ubuntu-latest
+            target: linux-x64-cpu
+            build_type: CPU
+            cmake_args: ""
+            artifact_name: llm
+            asset_name: llm-linux-x64-cpu
+          
+          - os: ubuntu-latest
+            target: linux-x64-rocm
+            build_type: ROCm
+            cmake_args: "-DGGML_HIP=ON"
+            artifact_name: llm
+            asset_name: llm-linux-x64-rocm
+          
+          - os: windows-latest
+            target: windows-x64
+            build_type: CUDA
+            cmake_args: "-DGGML_CUDA=ON"
+            artifact_name: llm.exe
+            asset_name: llm-windows-x64-cuda
+          
+          - os: windows-latest
+            target: windows-x64-cpu
+            build_type: CPU
+            cmake_args: ""
+            artifact_name: llm.exe
+            asset_name: llm-windows-x64-cpu
+          
+          - os: macos-latest
+            target: macos-arm64
+            build_type: Metal
+            cmake_args: "-DGGML_METAL=ON"
+            artifact_name: llm
+            asset_name: llm-macos-arm64
+          
+          - os: macos-13
+            target: macos-x64
+            build_type: CPU
+            cmake_args: ""
+            artifact_name: llm
+            asset_name: llm-macos-x64
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup CUDA (Ubuntu)
+      if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'CUDA'
+      uses: cuda-toolkit/cuda-toolkit@v1
+      with:
+        cuda: '12.3'
+
+    - name: Setup CUDA (Windows)
+      if: matrix.os == 'windows-latest' && matrix.build_type == 'CUDA'
+      uses: cuda-toolkit/cuda-toolkit@v1
+      with:
+        cuda: '12.3'
+
+    - name: Setup ROCm (Ubuntu)
+      if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'ROCm'
+      run: |
+        # Install ROCm
+        wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | sudo apt-key add -
+        echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ ubuntu main' | sudo tee /etc/apt/sources.list.d/rocm.list
+        sudo apt-get update
+        sudo apt-get install -y rocm-dev
+
+    - name: Build (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLAMA_BUILD_TESTS=OFF \
+          -DLLAMA_BUILD_EXAMPLES=OFF \
+          -DLLAMA_BUILD_SERVER=ON \
+          -DLLAMA_BUILD_TOOLS=ON \
+          -DLLAMA_STATIC=ON \
+          ${{ matrix.cmake_args }}
+        
+        cmake --build build --config Release --target llm -j
+
+    - name: Build (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        cmake -B build `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DLLAMA_BUILD_TESTS=OFF `
+          -DLLAMA_BUILD_EXAMPLES=OFF `
+          -DLLAMA_BUILD_SERVER=ON `
+          -DLLAMA_BUILD_TOOLS=ON `
+          -DLLAMA_STATIC=ON `
+          ${{ matrix.cmake_args }}
+        
+        cmake --build build --config Release --target llm
+
+    - name: Create archive (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        mkdir -p release
+        cp build/bin/${{ matrix.artifact_name }} release/
+        cp README.md LICENSE release/
+        
+        # Create a simple install script
+        cat > release/install.sh << 'EOF'
+        #!/bin/bash
+        echo "Installing LLM CLI..."
+        sudo cp llm /usr/local/bin/
+        sudo chmod +x /usr/local/bin/llm
+        echo "LLM CLI installed successfully!"
+        echo "Run 'llm --help' to get started."
+        EOF
+        chmod +x release/install.sh
+        
+        cd release
+        tar -czf ../${{ matrix.asset_name }}.tar.gz *
+        cd ..
+        
+        # Generate SHA256 checksum
+        sha256sum ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
+
+    - name: Create archive (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        New-Item -ItemType Directory -Force -Path release
+        Copy-Item "build\bin\Release\${{ matrix.artifact_name }}" -Destination "release\"
+        Copy-Item "README.md", "LICENSE" -Destination "release\"
+        
+        # Create a simple install script
+        @"
+        @echo off
+        echo Installing LLM CLI...
+        copy llm.exe "%PROGRAMFILES%\LLM CLI\" >nul 2>&1
+        if errorlevel 1 (
+            echo Please run as Administrator
+            pause
+            exit /b 1
+        )
+        setx PATH "%PATH%;%PROGRAMFILES%\LLM CLI" >nul 2>&1
+        echo LLM CLI installed successfully!
+        echo Restart your terminal and run 'llm --help' to get started.
+        pause
+        "@ | Out-File -FilePath "release\install.bat" -Encoding ASCII
+        
+        Compress-Archive -Path "release\*" -DestinationPath "${{ matrix.asset_name }}.zip"
+        
+        # Generate SHA256 checksum
+        (Get-FileHash -Path "${{ matrix.asset_name }}.zip" -Algorithm SHA256).Hash | Out-File -FilePath "${{ matrix.asset_name }}.zip.sha256"
+
+    - name: Upload Release Asset (Unix)
+      if: runner.os != 'Windows'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ matrix.asset_name }}.tar.gz
+        asset_name: ${{ matrix.asset_name }}.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Checksum (Unix)
+      if: runner.os != 'Windows'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ matrix.asset_name }}.tar.gz.sha256
+        asset_name: ${{ matrix.asset_name }}.tar.gz.sha256
+        asset_content_type: text/plain
+
+    - name: Upload Release Asset (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ matrix.asset_name }}.zip
+        asset_name: ${{ matrix.asset_name }}.zip
+        asset_content_type: application/zip
+
+    - name: Upload Checksum (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ matrix.asset_name }}.zip.sha256
+        asset_name: ${{ matrix.asset_name }}.zip.sha256
+        asset_content_type: text/plain

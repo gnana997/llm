@@ -3,6 +3,7 @@
 #include "ggml-backend-impl.h"
 
 #include "ggml-cuda/common.cuh"
+#include "ggml-cuda/gpu-profiler.cuh"
 #include "ggml-cuda/acc.cuh"
 #include "ggml-cuda/arange.cuh"
 #include "ggml-cuda/argmax.cuh"
@@ -49,6 +50,7 @@
 #include <array>
 #include <atomic>
 #include <charconv>
+#include <chrono>
 #include <cinttypes>
 #include <condition_variable>
 #include <cstddef>
@@ -63,6 +65,19 @@
 #include <stdlib.h>
 #include <string>
 #include <vector>
+
+// Include metrics if available in the build
+#if __has_include("../../common/metrics.h")
+#include "../../common/metrics.h"
+#include "../../common/metrics-gpu.h"
+#define METRICS_AVAILABLE
+#endif
+
+// Include logging if available
+#if __has_include("../../common/log-ex.h")
+#include "../../common/log-ex.h"
+#define LOGGING_AVAILABLE
+#endif
 
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
@@ -200,6 +215,11 @@ static ggml_cuda_device_info ggml_cuda_init() {
 
     ggml_cuda_device_info info = {};
 
+#ifdef METRICS_AVAILABLE
+    auto init_start = std::chrono::high_resolution_clock::now();
+    ggml_cuda_profiler::init_profiling_metrics();
+#endif
+
     cudaError_t err = cudaGetDeviceCount(&info.device_count);
     if (err != cudaSuccess) {
         GGML_LOG_ERROR("%s: failed to initialize " GGML_CUDA_NAME ": %s\n", __func__, cudaGetErrorString(err));
@@ -207,6 +227,11 @@ static ggml_cuda_device_info ggml_cuda_init() {
     }
 
     GGML_ASSERT(info.device_count <= GGML_CUDA_MAX_DEVICES);
+
+#ifdef METRICS_AVAILABLE
+    using namespace llama::metrics;
+    METRIC_SET("gpu_count_total", (double)info.device_count);
+#endif
 
     int64_t total_vram = 0;
 #ifdef GGML_CUDA_FORCE_MMQ
@@ -247,6 +272,28 @@ static ggml_cuda_device_info ggml_cuda_init() {
         info.devices[id].nsm        = prop.multiProcessorCount;
         info.devices[id].smpb       = prop.sharedMemPerBlock;
         info.devices[id].warp_size  = prop.warpSize;
+        info.devices[id].total_vram = prop.totalGlobalMem;
+        
+        // Query extended device capabilities
+        ggml_cuda_profiler::query_device_capabilities(id, info.devices[id]);
+        
+        // Profile memory bandwidth (optional, controlled by env var)
+        if (getenv("GGML_CUDA_PROFILE_BANDWIDTH") != nullptr) {
+#ifdef METRICS_AVAILABLE
+            auto profile_start = std::chrono::high_resolution_clock::now();
+#endif
+            auto profile_result = ggml_cuda_profiler::profile_memory_bandwidth(id);
+            info.devices[id].memory_bandwidth_gbps = profile_result.measured_bandwidth_gbps;
+            info.devices[id].pcie_generation = profile_result.pcie_generation;
+            info.devices[id].pcie_link_width = profile_result.pcie_link_width;
+            info.devices[id].has_nvlink = profile_result.has_nvlink;
+            
+#ifdef METRICS_AVAILABLE
+            auto profile_end = std::chrono::high_resolution_clock::now();
+            float profile_ms = std::chrono::duration<float, std::milli>(profile_end - profile_start).count();
+            ggml_cuda_profiler::track_profiling_metrics(id, profile_ms, profile_result);
+#endif
+        }
 #if defined(GGML_USE_HIP) && defined(__HIP_PLATFORM_AMD__)
         info.devices[id].smpbo = prop.sharedMemPerBlock;
 
@@ -282,7 +329,50 @@ static ggml_cuda_device_info ggml_cuda_init() {
 
     for (int id = 0; id < info.device_count; ++id) {
         info.default_tensor_split[id] /= total_vram;
+        
+#ifdef METRICS_AVAILABLE
+        // Track per-device metrics
+        std::string suffix = "_gpu" + std::to_string(id);
+        auto& registry = llama::metrics::metric_registry::instance();
+        
+        auto memory_metric = registry.register_metric<llama::metrics::gauge>(
+            "gpu_memory_total_bytes" + suffix,
+            "Total GPU memory for device " + std::to_string(id));
+        if (memory_metric) {
+            memory_metric->set((double)info.devices[id].total_vram);
+        }
+        
+        auto cc_metric = registry.register_metric<llama::metrics::gauge>(
+            "gpu_compute_capability" + suffix,
+            "Compute capability for device " + std::to_string(id));
+        if (cc_metric) {
+            cc_metric->set((double)info.devices[id].cc);
+        }
+        
+        auto l2_cache_metric = registry.register_metric<llama::metrics::gauge>(
+            "gpu_l2_cache_size_kb" + suffix,
+            "L2 cache size in KB for device " + std::to_string(id));
+        if (l2_cache_metric) {
+            l2_cache_metric->set((double)info.devices[id].l2_cache_size_kb);
+        }
+#endif
     }
+    
+    // Detect GPU topology (peer connections)
+    if (info.device_count > 1) {
+        ggml_cuda_profiler::detect_gpu_topology(info);
+    }
+    
+    // Log comprehensive GPU information
+    if (getenv("GGML_CUDA_LOG_TOPOLOGY") != nullptr || getenv("GGML_CUDA_PROFILE_BANDWIDTH") != nullptr) {
+        ggml_cuda_profiler::log_gpu_topology(info);
+    }
+
+#ifdef METRICS_AVAILABLE
+    auto init_end = std::chrono::high_resolution_clock::now();
+    float init_ms = std::chrono::duration<float, std::milli>(init_end - init_start).count();
+    METRIC_OBSERVE("gpu_initialization_duration_us", init_ms * 1000);
+#endif
 
     // configure logging to stdout
     // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));

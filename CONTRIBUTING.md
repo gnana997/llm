@@ -1,127 +1,305 @@
-# Pull requests (for contributors)
+# Contributing to LLM CLI
 
-- llama.cpp uses the ggml tensor library for model evaluation. If you are unfamiliar with ggml, consider taking a look at the [examples in the ggml repository](https://github.com/ggml-org/ggml/tree/master/examples/). [simple](https://github.com/ggml-org/ggml/tree/master/examples/simple) shows the bare minimum for using ggml. [gpt-2](https://github.com/ggml-org/ggml/tree/master/examples/gpt-2) has minimal implementations for language model inference using GPT-2. [mnist](https://github.com/ggml-org/ggml/tree/master/examples/mnist) demonstrates how to train and evaluate a simple image classifier
-- Test your changes:
-    - Execute [the full CI locally on your machine](ci/README.md) before publishing
-    - Verify that the perplexity and the performance are not affected negatively by your changes (use `llama-perplexity` and `llama-bench`)
-    - If you modified the `ggml` source, run the `test-backend-ops` tool to check whether different backend implementations of the `ggml` operators produce consistent results (this requires access to at least two different `ggml` backends)
-    - If you modified a `ggml` operator or added a new one, add the corresponding test cases to `test-backend-ops`
-- Create separate PRs for each feature or fix. Avoid combining unrelated changes in a single PR
-- Consider allowing write access to your branch for faster reviews, as reviewers can push commits directly
-- If your PR becomes stale, don't hesitate to ping the maintainers in the comments
+Thank you for your interest in contributing to LLM CLI! This document provides guidelines for contributing to the project.
 
-# Pull requests (for collaborators)
+## Table of Contents
 
-- Squash-merge PRs
-- Use the following format for the squashed commit title: `<module> : <commit title> (#<issue_number>)`. For example: `utils : fix typo in utils.py (#1234)`
-- Optionally pick a `<module>` from here: https://github.com/ggml-org/llama.cpp/wiki/Modules
-- Consider adding yourself to [CODEOWNERS](CODEOWNERS)
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Setup](#development-setup)
+- [How to Contribute](#how-to-contribute)
+- [Adding New CLI Commands](#adding-new-cli-commands)
+- [Testing Guidelines](#testing-guidelines)
+- [Pull Request Process](#pull-request-process)
+- [Coding Standards](#coding-standards)
 
-# Coding guidelines
+## Code of Conduct
 
-- Avoid adding third-party dependencies, extra files, extra headers, etc.
-- Always consider cross-compatibility with other operating systems and architectures
-- Avoid fancy-looking modern STL constructs, use basic `for` loops, avoid templates, keep it simple
-- Vertical alignment makes things more readable and easier to batch edit
-- Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
-- Use sized integer types such as `int32_t` in the public API, e.g. `size_t` may also be appropriate for allocation sizes or byte offsets
-- Declare structs with `struct foo {}` instead of `typedef struct foo {} foo`
-    - In C++ code omit optional `struct` and `enum` keyword whenever they are not necessary
-    ```cpp
-    // OK
-    llama_context * ctx;
-    const llama_rope_type rope_type;
+Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-    // not OK
-    struct llama_context * ctx;
-    const enum llama_rope_type rope_type;
-    ```
+## Getting Started
 
-    _(NOTE: this guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline.)_
+1. Fork the repository on GitHub
+2. Clone your fork locally:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/llm.git
+   cd llm
+   ```
+3. Add the upstream repository:
+   ```bash
+   git remote add upstream https://github.com/gnana997/llm.git
+   ```
 
-- Try to follow the existing patterns in the code (indentation, spaces, etc.). In case of doubt use `clang-format` (from clang-tools v15+) to format the added code
-- For anything not covered in the current guidelines, refer to the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)
-- Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
-- Matrix multiplication is unconventional: [`C = ggml_mul_mat(ctx, A, B)`](https://github.com/ggml-org/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means $C^T = A B^T \Leftrightarrow C = B A^T.$
+## Development Setup
 
-![matmul](media/matmul.png)
+### Prerequisites
 
-# Naming guidelines
+- CMake 3.14 or higher
+- C++17 compatible compiler
+- CUDA Toolkit 11.0+ (optional, for GPU support)
+- Git
 
-- Use `snake_case` for function, variable and type names
-- Naming usually optimizes for longest common prefix (see https://github.com/ggml-org/ggml/pull/302#discussion_r1243240963)
+### Building the Project
 
-    ```cpp
-    // not OK
-    int small_number;
-    int big_number;
+```bash
+# Standard build
+cmake -B build -DGGML_CUDA=ON  # Enable CUDA if available
+cmake --build build --config Release -j
 
-    // OK
-    int number_small;
-    int number_big;
-    ```
+# Development build with tests
+cmake -B build-dev -DLLAMA_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-dev -j
 
-- Enum values are always in upper case and prefixed with the enum name
+# Run tests
+cd build-dev && ctest
+```
 
-    ```cpp
-    enum llama_vocab_type {
-        LLAMA_VOCAB_TYPE_NONE = 0,
-        LLAMA_VOCAB_TYPE_SPM  = 1,
-        LLAMA_VOCAB_TYPE_BPE  = 2,
-        LLAMA_VOCAB_TYPE_WPM  = 3,
-        LLAMA_VOCAB_TYPE_UGM  = 4,
-        LLAMA_VOCAB_TYPE_RWKV = 5,
-    };
-    ```
+### Running the CLI
 
-- The general naming pattern is `<class>_<method>`, with `<method>` being `<action>_<noun>`
+```bash
+./build/bin/llm --help
+```
 
-    ```cpp
-    llama_model_init();           // class: "llama_model",         method: "init"
-    llama_sampler_chain_remove(); // class: "llama_sampler_chain", method: "remove"
-    llama_sampler_get_seed();     // class: "llama_sampler",       method: "get_seed"
-    llama_set_embeddings();       // class: "llama_context",       method: "set_embeddings"
-    llama_n_threads();            // class: "llama_context",       method: "n_threads"
-    llama_adapter_lora_free();    // class: "llama_adapter_lora",  method: "free"
-    ```
+## How to Contribute
 
-    - The `get` `<action>` can be omitted
-    - The `<noun>` can be omitted if not necessary
-    - The `_context` suffix of the `<class>` is optional. Use it to disambiguate symbols when needed
-    - Use `init`/`free` for constructor/destructor `<action>`
+### Areas for Contribution
 
-- Use the `_t` suffix when a type is supposed to be opaque to the user - it's not relevant to them if it is a struct or anything else
+1. **New CLI Commands** - Add useful commands to the CLI
+2. **GPU Features** - Enhance GPU profiling and monitoring
+3. **Documentation** - Improve docs and examples
+4. **Bug Fixes** - Fix issues and improve stability
+5. **Performance** - Optimize performance and resource usage
+6. **Tests** - Add test coverage for new and existing features
 
-    ```cpp
-    typedef struct llama_context * llama_context_t;
+### Reporting Issues
 
-    enum llama_pooling_type llama_pooling_type(const llama_context_t ctx);
-    ```
+- Use the issue templates provided
+- Include system information (OS, GPU, CUDA version)
+- Provide minimal reproducible examples
+- Check existing issues before creating new ones
 
-    _(NOTE: this guideline is yet to be applied to the `llama.cpp` codebase. New code should follow this guideline)_
+## Adding New CLI Commands
 
-- C/C++ filenames are all lowercase with dashes. Headers use the `.h` extension. Source files use the `.c` or `.cpp` extension
-- Python filenames are all lowercase with underscores
+The LLM CLI uses a modular command framework. Here's how to add a new command:
 
-- _(TODO: abbreviations usage)_
+### 1. Create Command Header
 
-# Preprocessor directives
+Create `common/cli-framework/commands/your_command.h`:
 
-- _(TODO: add guidelines with examples and apply them to the codebase)_
+```cpp
+#pragma once
+#include "../core/command.h"
 
-    ```cpp
-    #ifdef FOO
-    #endif // FOO
-    ```
+namespace llama {
+namespace cli {
 
-# Documentation
+class YourCommand : public Command {
+public:
+    std::string name() const override { return "your-command"; }
+    std::string description() const override { return "Brief description"; }
+    std::string usage() const override { return "your-command [options]"; }
+    std::vector<std::string> aliases() const override { return {"yc"}; }
+    
+    int execute(CommandContext& ctx) override;
+};
 
-- Documentation is a community effort
-- When you need to look into the source code to figure out how to use an API consider adding a short summary to the header file for future reference
-- When you notice incorrect or outdated documentation, please update it
+} // namespace cli
+} // namespace llama
+```
 
-# Resources
+### 2. Implement Command
 
-The Github issues, PRs and discussions contain a lot of information that can be useful to get familiar with the codebase. For convenience, some of the more important information is referenced from Github projects:
+Create `common/cli-framework/commands/your_command.cpp`:
 
-https://github.com/ggml-org/llama.cpp/projects
+```cpp
+#include "your_command.h"
+#include <iostream>
+
+namespace llama {
+namespace cli {
+
+int YourCommand::execute(CommandContext& ctx) {
+    // Parse options
+    bool verbose = ctx.hasOption("verbose") || ctx.hasOption("v");
+    
+    // Your command logic here
+    std::cout << "Executing your command..." << std::endl;
+    
+    // Return 0 for success, non-zero for error
+    return 0;
+}
+
+} // namespace cli
+} // namespace llama
+```
+
+### 3. Register Command
+
+Add to `tools/llm/main.cpp`:
+
+```cpp
+#include "common/cli-framework/commands/your_command.h"
+
+// In main():
+app.addCommand(std::make_unique<YourCommand>());
+```
+
+### 4. Update CMakeLists.txt
+
+Add your source files to `common/cli-framework/CMakeLists.txt`.
+
+## Testing Guidelines
+
+### Unit Tests
+
+- Write tests for new functionality
+- Place tests in appropriate test files
+- Use the existing test framework
+
+### Integration Tests
+
+- Test command-line interface behavior
+- Verify output formats (text, JSON)
+- Test error conditions
+
+### GPU Testing
+
+For GPU-specific features:
+
+1. Test on systems without GPUs (graceful fallback)
+2. Test with single GPU
+3. Test with multiple GPUs (if possible)
+4. Document GPU requirements
+
+### Manual Testing Checklist
+
+Before submitting a PR:
+
+- [ ] Build succeeds on your platform
+- [ ] All tests pass
+- [ ] Command works as expected
+- [ ] Help text is clear and accurate
+- [ ] Error messages are helpful
+- [ ] Code follows project style
+
+## Pull Request Process
+
+1. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes**
+   - Follow coding standards
+   - Add tests
+   - Update documentation
+
+3. **Commit your changes**
+   ```bash
+   git add .
+   git commit -m "cli: add new feature X"
+   ```
+   
+   Commit message format:
+   - `cli:` for CLI-specific changes
+   - `gpu:` for GPU-related changes
+   - `fix:` for bug fixes
+   - `docs:` for documentation
+   - `test:` for test additions
+
+4. **Push to your fork**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+5. **Create Pull Request**
+   - Use the PR template
+   - Link related issues
+   - Provide clear description
+   - Include test results
+
+### PR Review Process
+
+- PRs require at least one review
+- Address review feedback promptly
+- Keep PRs focused and small
+- Update PR description as needed
+
+## Coding Standards
+
+### C++ Guidelines
+
+Follow the existing codebase style:
+
+- Use 4 spaces for indentation
+- Opening braces on same line
+- Use `snake_case` for functions and variables
+- Use `PascalCase` for classes
+- Add meaningful comments
+
+### Example Code Style
+
+```cpp
+namespace llama {
+namespace cli {
+
+class ExampleCommand : public Command {
+private:
+    int count_ = 0;
+    
+public:
+    int execute(CommandContext& ctx) override {
+        // Parse arguments
+        auto args = ctx.args();
+        
+        if (args.empty()) {
+            std::cerr << "Error: No arguments provided\n";
+            return 1;
+        }
+        
+        // Process each argument
+        for (const auto& arg : args) {
+            process_argument(arg);
+        }
+        
+        return 0;
+    }
+    
+private:
+    void process_argument(const std::string& arg) {
+        // Implementation here
+        count_++;
+    }
+};
+
+} // namespace cli
+} // namespace llama
+```
+
+### Documentation
+
+- Add comments for complex logic
+- Document public APIs
+- Update README for new features
+- Add examples for new commands
+
+## Syncing with Upstream
+
+Keep your fork up to date:
+
+```bash
+git fetch upstream
+git checkout master
+git merge upstream/master
+git push origin master
+```
+
+For detailed upstream sync instructions, see [.github/UPSTREAM_SYNC.md](.github/UPSTREAM_SYNC.md).
+
+## Questions?
+
+- Open a [GitHub Discussion](https://github.com/gnana997/llm/discussions)
+- Check existing issues and PRs
+- Join our community chat (coming soon)
+
+Thank you for contributing to LLM CLI!

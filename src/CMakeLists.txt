@@ -35,6 +35,35 @@ add_library(llama
             unicode-data.cpp
             unicode.cpp
             unicode.h
+            orchestration/gpu_profiler.cpp
+            orchestration/gpu_profiler.h
+            orchestration/gpu_profiler_interface.h
+            orchestration/gpu_profiler_factory.cpp
+            orchestration/gpu_profiler_factory.h
+            orchestration/ggml_gpu_profiler.cpp
+            orchestration/ggml_gpu_profiler.h
+            orchestration/cuda_gpu_profiler.cpp
+            orchestration/cuda_gpu_profiler.h
+            orchestration/generic_gpu_profiler.cpp
+            orchestration/generic_gpu_profiler.h
+            orchestration/unified_gpu_profiler.cpp
+            orchestration/unified_gpu_profiler.h
+            orchestration/rocm_gpu_profiler.cpp
+            orchestration/rocm_gpu_profiler.h
+            orchestration/layer_distributor.cpp
+            orchestration/layer_distributor.h
+            orchestration/metrics.cpp
+            orchestration/metrics.h
+            orchestration/gpu_architecture_analyzer.cpp
+            orchestration/gpu_architecture_analyzer.h
+            orchestration/orchestration_logger.cpp
+            orchestration/orchestration_logger.h
+            orchestration/advanced_metrics.cpp
+            orchestration/advanced_metrics.h
+            orchestration/runtime_performance_monitor.cpp
+            orchestration/runtime_performance_monitor.h
+            orchestration/adaptive_layer_redistributor.cpp
+            orchestration/adaptive_layer_redistributor.h
             )
 
 target_include_directories(llama PRIVATE .)

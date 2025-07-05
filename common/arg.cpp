@@ -2396,6 +2396,27 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_SPLIT_MODE"));
     add_opt(common_arg(
+        {"--gpu-strategy"}, "{equal,optimized,manual}",
+        "strategy for distributing layers across multiple GPUs:\n"
+        "- equal (default): distribute layers evenly\n"
+        "- optimized: intelligent distribution based on GPU capabilities\n"
+        "- manual: use custom distribution via --tensor-split",
+        [](common_params & params, const std::string & value) {
+            if (value == "equal") {
+                params.gpu_strategy = LLAMA_GPU_STRATEGY_EQUAL;
+            } else if (value == "optimized" || value == "intelligent") {
+                params.gpu_strategy = LLAMA_GPU_STRATEGY_OPTIMIZED;
+            } else if (value == "manual") {
+                params.gpu_strategy = LLAMA_GPU_STRATEGY_MANUAL;
+            } else {
+                throw std::invalid_argument("invalid GPU strategy: " + value);
+            }
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without GPU support. GPU strategy has no effect.\n");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_MAIN}).set_env("LLAMA_ARG_GPU_STRATEGY"));
+    add_opt(common_arg(
         {"-ts", "--tensor-split"}, "N0,N1,N2,...",
         "fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1",
         [](common_params & params, const std::string & value) {

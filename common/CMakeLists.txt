@@ -62,6 +62,14 @@ add_library(${TARGET} STATIC
     llguidance.cpp
     log.cpp
     log.h
+    log-ex.cpp
+    log-ex.h
+    metrics.cpp
+    metrics.h
+    metrics-gpu.cpp
+    metrics-gpu.h
+    metrics-aggregator.cpp
+    metrics-aggregator.h
     ngram-cache.cpp
     ngram-cache.h
     regex-partial.cpp
@@ -137,6 +145,9 @@ endif ()
 target_include_directories(${TARGET} PUBLIC . ../vendor)
 target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+
+# Add CLI framework subdirectory
+add_subdirectory(cli-framework)
 
 
 #

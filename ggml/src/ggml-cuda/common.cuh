@@ -690,6 +690,30 @@ struct ggml_cuda_device_info {
         size_t  vmm_granularity;    // granularity of virtual memory
         size_t  total_vram;
         int     warp_size;          // Number of threads in a dispatch
+        
+        // Extended profiling information
+        float   memory_bandwidth_gbps;    // Measured memory bandwidth
+        int     pcie_generation;          // PCIe generation (3, 4, 5)
+        int     pcie_link_width;          // PCIe link width (x1, x4, x8, x16)
+        bool    has_nvlink;               // NVLink support
+        int     nvlink_peers[GGML_CUDA_MAX_DEVICES]; // NVLink connectivity (-1 = no link, >= 0 = link generation)
+        float   max_clock_mhz;            // Maximum GPU clock speed
+        float   memory_clock_mhz;         // Memory clock speed
+        int     l2_cache_size_kb;         // L2 cache size in KB
+        
+        // Compute capabilities
+        bool    supports_fp16;            // Native FP16 support
+        bool    supports_int8_dp4a;       // INT8 dot product support
+        bool    supports_tensor_cores;    // Tensor core support
+        bool    supports_bf16;            // BF16 support
+        int     max_threads_per_block;    // Maximum threads per block
+        int     max_blocks_per_sm;        // Maximum blocks per SM
+        int     max_registers_per_block;  // Maximum registers per block
+        
+        // Memory hierarchy
+        int     l1_cache_size_kb;         // L1 cache/shared memory size
+        int     constant_memory_kb;       // Constant memory size
+        int     texture_memory_kb;        // Texture memory size
     };
 
     cuda_device_info devices[GGML_CUDA_MAX_DEVICES] = {};

@@ -146,6 +146,13 @@ target_include_directories(${TARGET} PUBLIC . ../vendor)
 target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
 
+# Add CUDA include directories if CUDA is enabled
+if(GGML_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    target_include_directories(${TARGET} PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+    target_compile_definitions(${TARGET} PRIVATE GGML_USE_CUDA)
+endif()
+
 # Add CLI framework subdirectory
 add_subdirectory(cli-framework)
 

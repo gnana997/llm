@@ -70,13 +70,15 @@ target_include_directories(llama PRIVATE .)
 target_include_directories(llama PUBLIC ../include)
 target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
-target_link_libraries(llama PUBLIC ggml)
+target_link_libraries(llama PUBLIC ggml common)
 
 # Add CUDA include directories if CUDA is enabled
 if(GGML_CUDA)
     find_package(CUDAToolkit REQUIRED)
     target_include_directories(llama PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
     target_compile_definitions(llama PRIVATE GGML_USE_CUDA)
+    # Link CUDA libraries
+    target_link_libraries(llama PUBLIC CUDA::cudart CUDA::cublas CUDA::curand)
 endif()
 
 if (BUILD_SHARED_LIBS)

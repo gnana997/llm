@@ -6,9 +6,7 @@
 #include <cstdlib>
 
 #ifdef GGML_USE_CUDA
-#include "ggml-cuda.h"
-#include "ggml-cuda/common.cuh"
-#include "ggml-cuda/gpu-profiler.cuh"
+#include "gpu_info_cuda.h"
 #endif
 
 namespace llama {
@@ -26,15 +24,21 @@ int GpuInfoCommand::execute([[maybe_unused]] CommandContext& ctx) {
     benchmark_ = ctx.hasOption("benchmark") || ctx.hasOption("bench");
     
     // Enable profiling if requested
-    if (benchmark_) {
-        setenv("GGML_CUDA_PROFILE_BANDWIDTH", "1", 1);
-    }
-    if (verbose_) {
-        setenv("GGML_CUDA_LOG_TOPOLOGY", "1", 1);
-    }
+    cuda_enable_profiling(benchmark_, verbose_);
     
     // Get GPU information
-    const auto& gpu_info = ggml_cuda_info();
+    cuda_system_info_t gpu_info;
+    if (!cuda_get_system_info(&gpu_info)) {
+        if (!json_) {
+            std::cout << "Failed to get CUDA system information.\n";
+        } else {
+            std::cout << "{\"error\": \"Failed to get CUDA system information\"}\n";
+        }
+        return 1;
+    }
+    
+    // Try to get GGML-specific info if available
+    cuda_get_ggml_info(&gpu_info);
     
     if (gpu_info.device_count == 0) {
         if (!json_) {
@@ -60,7 +64,9 @@ int GpuInfoCommand::execute([[maybe_unused]] CommandContext& ctx) {
 
 #ifdef GGML_USE_CUDA
 void GpuInfoCommand::displayBasicInfo() {
-    const auto& gpu_info = ggml_cuda_info();
+    cuda_system_info_t gpu_info;
+    cuda_get_system_info(&gpu_info);
+    cuda_get_ggml_info(&gpu_info);
     
     std::cout << "GPU Information:\n";
     std::cout << "================\n\n";
@@ -70,44 +76,41 @@ void GpuInfoCommand::displayBasicInfo() {
     for (int i = 0; i < gpu_info.device_count; i++) {
         const auto& dev = gpu_info.devices[i];
         
-        // Get device name
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        
-        std::cout << "Device " << i << ": " << prop.name << "\n";
+        std::cout << "Device " << i << ": " << dev.name << "\n";
         
         // Compute capability and architecture
-        std::cout << "  Compute Capability: " << (dev.cc / 10) << "." << (dev.cc % 10);
+        std::cout << "  Compute Capability: " << dev.cc_major << "." << dev.cc_minor;
         
         // Architecture name
         const char* arch_name = "";
-        if (dev.cc >= 890) arch_name = " (Ada Lovelace)";
-        else if (dev.cc >= 860) arch_name = " (Hopper)";
-        else if (dev.cc >= 800) arch_name = " (Ampere)";
-        else if (dev.cc >= 750) arch_name = " (Turing)";
-        else if (dev.cc >= 700) arch_name = " (Volta)";
-        else if (dev.cc >= 600) arch_name = " (Pascal)";
-        else if (dev.cc >= 500) arch_name = " (Maxwell)";
+        int cc = dev.compute_capability;
+        if (cc >= 890) arch_name = " (Ada Lovelace)";
+        else if (cc >= 860) arch_name = " (Hopper)";
+        else if (cc >= 800) arch_name = " (Ampere)";
+        else if (cc >= 750) arch_name = " (Turing)";
+        else if (cc >= 700) arch_name = " (Volta)";
+        else if (cc >= 600) arch_name = " (Pascal)";
+        else if (cc >= 500) arch_name = " (Maxwell)";
         std::cout << arch_name << "\n";
         
         // Memory
-        double memory_gb = dev.total_vram / (1024.0 * 1024.0 * 1024.0);
+        double memory_gb = dev.total_memory / (1024.0 * 1024.0 * 1024.0);
         total_memory_gb += memory_gb;
         std::cout << "  Memory: " << std::fixed << std::setprecision(2) << memory_gb << " GB\n";
         
         // SMs and cores
         int cores_per_sm = 0;
-        if (dev.cc >= 800) cores_per_sm = 128;  // Ampere and later
-        else if (dev.cc >= 700) cores_per_sm = 64;   // Volta, Turing
-        else if (dev.cc >= 600) cores_per_sm = 128;  // Pascal
-        else if (dev.cc >= 500) cores_per_sm = 128;  // Maxwell
+        if (cc >= 800) cores_per_sm = 128;  // Ampere and later
+        else if (cc >= 700) cores_per_sm = 64;   // Volta, Turing
+        else if (cc >= 600) cores_per_sm = 128;  // Pascal
+        else if (cc >= 500) cores_per_sm = 128;  // Maxwell
         else cores_per_sm = 192;  // Kepler
         
-        int total_cores = dev.nsm * cores_per_sm;
-        std::cout << "  SMs: " << dev.nsm << ", Cores: " << total_cores << "\n";
+        int total_cores = dev.sm_count * cores_per_sm;
+        std::cout << "  SMs: " << dev.sm_count << ", Cores: " << total_cores << "\n";
         
         // Clock speed
-        std::cout << "  Clock: " << (int)dev.max_clock_mhz << " MHz\n";
+        std::cout << "  Clock: " << dev.max_clock_mhz << " MHz\n";
         
         // L2 Cache
         std::cout << "  L2 Cache: " << (dev.l2_cache_size_kb / 1024) << " MB\n";
@@ -144,7 +147,9 @@ void GpuInfoCommand::displayBasicInfo() {
 }
 
 void GpuInfoCommand::displayVerboseInfo() {
-    const auto& gpu_info = ggml_cuda_info();
+    cuda_system_info_t gpu_info;
+    cuda_get_system_info(&gpu_info);
+    cuda_get_ggml_info(&gpu_info);
     
     std::cout << "GPU Information (Verbose):\n";
     std::cout << "==========================\n\n";
@@ -152,19 +157,15 @@ void GpuInfoCommand::displayVerboseInfo() {
     for (int i = 0; i < gpu_info.device_count; i++) {
         const auto& dev = gpu_info.devices[i];
         
-        // Get device name
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        
-        std::cout << "Device " << i << ": " << prop.name << "\n";
+        std::cout << "Device " << i << ": " << dev.name << "\n";
         std::cout << "  Architecture:\n";
-        std::cout << "    Compute Capability: " << (dev.cc / 10) << "." << (dev.cc % 10) << "\n";
+        std::cout << "    Compute Capability: " << dev.cc_major << "." << dev.cc_minor << "\n";
         std::cout << "    Warp Size: " << dev.warp_size << "\n";
         std::cout << "    Integrated: " << (dev.integrated ? "Yes" : "No") << "\n";
         
         std::cout << "  Memory:\n";
         std::cout << "    Total: " << std::fixed << std::setprecision(2) 
-                  << (dev.total_vram / (1024.0 * 1024.0 * 1024.0)) << " GB\n";
+                  << (dev.total_memory / (1024.0 * 1024.0 * 1024.0)) << " GB\n";
         if (dev.memory_bandwidth_gbps > 0) {
             std::cout << "    Bandwidth: " << std::fixed << std::setprecision(1) 
                       << dev.memory_bandwidth_gbps << " GB/s (measured)\n";
@@ -172,7 +173,7 @@ void GpuInfoCommand::displayVerboseInfo() {
         std::cout << "    Clock: " << dev.memory_clock_mhz << " MHz\n";
         
         std::cout << "  Compute:\n";
-        std::cout << "    SMs: " << dev.nsm << "\n";
+        std::cout << "    SMs: " << dev.sm_count << "\n";
         std::cout << "    Max Clock: " << dev.max_clock_mhz << " MHz\n";
         std::cout << "    Max Threads/Block: " << dev.max_threads_per_block << "\n";
         std::cout << "    Max Blocks/SM: " << dev.max_blocks_per_sm << "\n";
@@ -209,7 +210,9 @@ void GpuInfoCommand::displayVerboseInfo() {
 }
 
 void GpuInfoCommand::displayTopology() {
-    const auto& gpu_info = ggml_cuda_info();
+    cuda_system_info_t gpu_info;
+    cuda_get_system_info(&gpu_info);
+    cuda_get_ggml_info(&gpu_info);
     
     std::cout << "GPU Topology:\n";
     std::cout << "=============\n";
@@ -235,7 +238,9 @@ void GpuInfoCommand::displayTopology() {
 }
 
 void GpuInfoCommand::displayJsonInfo() {
-    const auto& gpu_info = ggml_cuda_info();
+    cuda_system_info_t gpu_info;
+    cuda_get_system_info(&gpu_info);
+    cuda_get_ggml_info(&gpu_info);
     
     std::cout << "{\n";
     std::cout << "  \"device_count\": " << gpu_info.device_count << ",\n";
@@ -244,26 +249,22 @@ void GpuInfoCommand::displayJsonInfo() {
     for (int i = 0; i < gpu_info.device_count; i++) {
         const auto& dev = gpu_info.devices[i];
         
-        // Get device name
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        
         std::cout << "    {\n";
         std::cout << "      \"id\": " << i << ",\n";
-        std::cout << "      \"name\": \"" << prop.name << "\",\n";
-        std::cout << "      \"compute_capability\": " << dev.cc << ",\n";
-        std::cout << "      \"compute_capability_major\": " << (dev.cc / 10) << ",\n";
-        std::cout << "      \"compute_capability_minor\": " << (dev.cc % 10) << ",\n";
+        std::cout << "      \"name\": \"" << dev.name << "\",\n";
+        std::cout << "      \"compute_capability\": " << dev.compute_capability << ",\n";
+        std::cout << "      \"compute_capability_major\": " << dev.cc_major << ",\n";
+        std::cout << "      \"compute_capability_minor\": " << dev.cc_minor << ",\n";
         std::cout << "      \"memory_gb\": " << std::fixed << std::setprecision(2) 
-                  << (dev.total_vram / (1024.0 * 1024.0 * 1024.0)) << ",\n";
-        std::cout << "      \"memory_bytes\": " << dev.total_vram << ",\n";
+                  << (dev.total_memory / (1024.0 * 1024.0 * 1024.0)) << ",\n";
+        std::cout << "      \"memory_bytes\": " << dev.total_memory << ",\n";
         
         if (dev.memory_bandwidth_gbps > 0) {
             std::cout << "      \"memory_bandwidth_gbps\": " << std::fixed << std::setprecision(1) 
                       << dev.memory_bandwidth_gbps << ",\n";
         }
         
-        std::cout << "      \"sms\": " << dev.nsm << ",\n";
+        std::cout << "      \"sms\": " << dev.sm_count << ",\n";
         std::cout << "      \"max_clock_mhz\": " << dev.max_clock_mhz << ",\n";
         std::cout << "      \"l2_cache_mb\": " << (dev.l2_cache_size_kb / 1024) << ",\n";
         std::cout << "      \"features\": [";
@@ -316,7 +317,7 @@ void GpuInfoCommand::displayJsonInfo() {
     // Calculate total memory
     double total_memory_gb = 0;
     for (int i = 0; i < gpu_info.device_count; i++) {
-        total_memory_gb += gpu_info.devices[i].total_vram / (1024.0 * 1024.0 * 1024.0);
+        total_memory_gb += gpu_info.devices[i].total_memory / (1024.0 * 1024.0 * 1024.0);
     }
     
     std::cout << "  \"total_memory_gb\": " << std::fixed << std::setprecision(2) << total_memory_gb << "\n";

@@ -8,10 +8,8 @@
 #include "ggml-cuda/common.cuh"
 
 // Check if ggml_cuda_info exists and is accessible
-extern "C" {
-    // Forward declaration - this should be available from ggml-cuda
-    extern const ggml_cuda_device_info& ggml_cuda_info();
-}
+// Forward declaration - this should be available from ggml-cuda
+extern const ggml_cuda_device_info& ggml_cuda_info();
 #endif
 
 extern "C" {

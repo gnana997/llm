@@ -42,8 +42,14 @@ if(GGML_CUDA)
     # Set CUDA properties for the library
     set_target_properties(llama_cli_framework PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON
-        CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
     )
+    
+    # Set CUDA architectures if specified
+    if(CMAKE_CUDA_ARCHITECTURES)
+        set_target_properties(llama_cli_framework PROPERTIES
+            CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
+        )
+    endif()
     
     # Add CUDA include directories
     target_include_directories(llama_cli_framework PRIVATE ${CUDA_INCLUDE_DIRS})

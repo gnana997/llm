@@ -137,13 +137,13 @@ jobs:
       if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'CUDA'
       uses: Jimver/cuda-toolkit@v0.2.11
       with:
-        cuda: '12.3'
+        cuda: '12.3.0'
 
     - name: Setup CUDA (Windows)
       if: matrix.os == 'windows-latest' && matrix.build_type == 'CUDA'
       uses: Jimver/cuda-toolkit@v0.2.11
       with:
-        cuda: '12.3'
+        cuda: '12.3.0'
 
     - name: Setup ROCm (Ubuntu)
       if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'ROCm'

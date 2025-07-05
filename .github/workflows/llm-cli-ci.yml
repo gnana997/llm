@@ -56,7 +56,7 @@ jobs:
       if: matrix.build_type == 'CUDA'
       uses: Jimver/cuda-toolkit@v0.2.11
       with:
-        cuda: '12.3'
+        cuda: '12.3.0'
 
     - name: Setup ROCm
       if: matrix.build_type == 'ROCm'
@@ -130,7 +130,7 @@ jobs:
       if: matrix.build_type == 'CUDA'
       uses: Jimver/cuda-toolkit@v0.2.11
       with:
-        cuda: '12.3'
+        cuda: '12.3.0'
 
     - name: Configure
       run: |

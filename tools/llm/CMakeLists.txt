@@ -12,6 +12,15 @@ target_link_libraries(${TARGET} PRIVATE
 
 target_compile_features(${TARGET} PRIVATE cxx_std_17)
 
+# Enable CUDA device linking if CUDA is enabled
+if(GGML_CUDA)
+    enable_language(CUDA)
+    set_target_properties(${TARGET} PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+endif()
+
 # Platform-specific settings
 if(WIN32)
     target_compile_definitions(${TARGET} PRIVATE _CRT_SECURE_NO_WARNINGS)

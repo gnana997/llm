@@ -505,22 +505,22 @@ void RuntimePerformanceMonitor::detect_slow_execution(int layer_id, const LayerP
         threshold_multiplier = 2.0f; // Default: 2x slower than average
     }
     
-    if (sample.execution_time.count() > stats.avg_execution_time * threshold_multiplier) {
+    if (sample.execution_time.count() > stats.avg_execution_time.count() * threshold_multiplier) {
         PerformanceAnomaly anomaly;
         anomaly.timestamp = std::chrono::steady_clock::now();
-        anomaly.type = AnomalyType::SLOW_EXECUTION;
+        anomaly.type = PerformanceAnomalyType::SLOW_EXECUTION;
         anomaly.affected_layer_id = layer_id;
         anomaly.affected_gpu_id = sample.gpu_id;
-        anomaly.severity = (sample.execution_time.count() > stats.avg_execution_time * 3.0f) 
-                          ? AnomalySeverity::HIGH 
-                          : AnomalySeverity::MEDIUM;
+        anomaly.severity = (sample.execution_time.count() > stats.avg_execution_time.count() * 3.0f) 
+                          ? 0.8f 
+                          : 0.5f;
         
         std::stringstream desc;
         desc << "Layer " << layer_id << " execution time (" 
              << sample.execution_time.count() << " us) is "
              << std::fixed << std::setprecision(1) 
-             << (sample.execution_time.count() / stats.avg_execution_time) 
-             << "x slower than average (" << stats.avg_execution_time << " us)";
+             << (static_cast<float>(sample.execution_time.count()) / stats.avg_execution_time.count()) 
+             << "x slower than average (" << stats.avg_execution_time.count() << " us)";
         anomaly.description = desc.str();
         
         add_anomaly(anomaly);

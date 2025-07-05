@@ -1627,7 +1627,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
     bool use_intelligent_distribution = params.gpu_strategy == LLAMA_GPU_STRATEGY_OPTIMIZED && all_zero;
     std::vector<int> layer_to_gpu_mapping;
     
-    if (use_intelligent_distribution && n_devices() > 1 && act_gpu_layers > 0) {
+    if (use_intelligent_distribution && n_devices() > 1 && n_gpu_layers > 0) {
         LLAMA_LOG_INFO("%s: using intelligent layer distribution across %zu GPUs\n", __func__, n_devices());
         
         // Profile GPUs
@@ -1646,7 +1646,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             config.enable_caching = true;
             
             // Distribute layers
-            auto distribution_result = distributor.distribute_layers(*this, act_gpu_layers, config);
+            auto distribution_result = distributor.distribute_layers(*this, n_gpu_layers, config);
             
             // Build layer to GPU mapping
             layer_to_gpu_mapping.resize(n_layer + 1, 0);  // +1 for output layer

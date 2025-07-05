@@ -3,7 +3,7 @@
 #include "common/cli-framework/commands/generate_command.h"
 #include "common/cli-framework/commands/gpu_info_command.h"
 #include "common.h"
-#include "common/log-ex.h"
+#include "src/log/log-ex.h"
 #include <sstream>
 #include <algorithm>
 

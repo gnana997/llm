@@ -14,7 +14,7 @@
 namespace llama {
 namespace cli {
 
-int GpuInfoCommand::execute(CommandContext& ctx) {
+int GpuInfoCommand::execute([[maybe_unused]] CommandContext& ctx) {
 #ifndef GGML_USE_CUDA
     std::cerr << "Error: CUDA support is not enabled in this build.\n";
     std::cerr << "Please rebuild with GGML_CUDA=ON to use GPU features.\n";

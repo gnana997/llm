@@ -11,6 +11,7 @@ add_library(llama_cli_framework STATIC
 target_include_directories(llama_cli_framework PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../ggml/src
 )
 
 target_link_libraries(llama_cli_framework

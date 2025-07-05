@@ -7,8 +7,8 @@
 
 #ifdef GGML_USE_CUDA
 #include "ggml-cuda.h"
-#include "ggml/src/ggml-cuda/common.cuh"
-#include "ggml/src/ggml-cuda/gpu-profiler.cuh"
+#include "ggml-cuda/common.cuh"
+#include "ggml-cuda/gpu-profiler.cuh"
 #endif
 
 namespace llama {

@@ -54,7 +54,7 @@ jobs:
 
     - name: Setup CUDA
       if: matrix.build_type == 'CUDA'
-      uses: cuda-toolkit/cuda-toolkit@v1
+      uses: Jimver/cuda-toolkit@v0.2.11
       with:
         cuda: '12.3'
 
@@ -128,7 +128,7 @@ jobs:
 
     - name: Setup CUDA
       if: matrix.build_type == 'CUDA'
-      uses: cuda-toolkit/cuda-toolkit@v1
+      uses: Jimver/cuda-toolkit@v0.2.11
       with:
         cuda: '12.3'
 
